@@ -57,7 +57,7 @@ cl /std:c++17 /EHsc /DUNICODE /D_UNICODE ^
    third_party\imgui\imgui_tables.cpp third_party\imgui\imgui_widgets.cpp ^
    third_party\imgui\backends\imgui_impl_win32.cpp ^
    third_party\imgui\backends\imgui_impl_dx11.cpp ^
-   /link d3d11.lib dxgi.lib d3dcompiler.lib Advapi32.lib ^
+   /link d3d11.lib dxgi.lib d3dcompiler.lib Advapi32.lib Shell32.lib ^
    /SUBSYSTEM:WINDOWS /MANIFEST:EMBED /MANIFESTINPUT:app.manifest ^
    /OUT:Starlite.exe
 ```

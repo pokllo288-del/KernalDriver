@@ -23,12 +23,31 @@
 #include "backends/imgui_impl_dx11.h"
 #include <d3d11.h>
 #include <tchar.h>
+#include <shellapi.h>
 #include <cmath>
 #include <cstdlib>
 #include <vector>
 #include <string>
 
 #include "DriverControl.h"
+
+// -------- Tiny preference store (HKCU) -------------------------------------
+// Remembers the user's "don't remind me again" choice across runs.
+static bool LoadDontWarnPref()
+{
+    DWORD val = 0, sz = sizeof(val);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Starlite",
+                     L"DontWarnTestMode", RRF_RT_REG_DWORD,
+                     nullptr, &val, &sz) == ERROR_SUCCESS)
+        return val != 0;
+    return false;
+}
+static void SaveDontWarnPref(bool v)
+{
+    DWORD val = v ? 1u : 0u;
+    RegSetKeyValueW(HKEY_CURRENT_USER, L"Software\\Starlite",
+                    L"DontWarnTestMode", REG_DWORD, &val, sizeof(val));
+}
 
 // -------- Driver identity (matches the installed kernel service) -----------
 static const wchar_t* kServiceName = L"SecureComms";
@@ -162,6 +181,10 @@ struct AppState {
     // Cached test-signing state (re-checked ~once/sec, not every frame).
     bool         testSigning = false;
     float        sigCheckT = 999.0f;
+
+    // First-time / not-in-test-mode explainer.
+    bool         prefsDontWarn = false;   // persisted "don't remind me again"
+    bool         popupDontShow = false;   // checkbox mirror inside the popup
 };
 
 // Draw a stylized circular "CS2" avatar placeholder (swap for a real texture
@@ -191,6 +214,82 @@ static void SetStatus(AppState& app, const DriverResult& r)
                             out.data(), n, nullptr, nullptr);
     app.statusLine  = out.empty() ? "(no message)" : out;
     app.statusError = !r.ok;
+}
+
+// Kick off the loading animation (which then installs+starts the driver).
+static void BeginLoad(AppState& app)
+{
+    app.screen = Screen::Loading;
+    app.screenT = 0.0f;
+    app.loadProgress = 0.0f;
+}
+
+// First-time explainer shown when the user clicks LOAD and Test Mode is off.
+// Informational, not forced: a signed driver can just "Continue anyway".
+static void RenderFirstLoadPopup(AppState& app)
+{
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(460, 0));
+
+    if (!ImGui::BeginPopupModal("Before loading##firstload", nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    ImGui::TextColored(ImVec4(0.56f, 0.74f, 1.0f, 1.0f),
+                       "Heads up - Test Mode is off");
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, 4));
+
+    ImGui::PushTextWrapPos(430);
+    ImGui::TextWrapped(
+        "This driver is unsigned, and Windows only loads an unsigned driver "
+        "when Test Mode is ON. To turn it on (one command + a reboot):");
+    ImGui::Dummy(ImVec2(0, 4));
+    ImGui::TextColored(ImVec4(0.8f, 0.88f, 1.0f, 1.0f),
+                       "    bcdedit /set testsigning on");
+    ImGui::Dummy(ImVec2(0, 4));
+    ImGui::TextWrapped(
+        "If Secure Boot is enabled, disable it in your UEFI/BIOS first. "
+        "If your driver IS signed, you can just continue.");
+    ImGui::PopTextWrapPos();
+
+    ImGui::Dummy(ImVec2(0, 6));
+    ImGui::Checkbox("Don't remind me again", &app.popupDontShow);
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, 4));
+
+    auto commitPref = [&]() {
+        if (app.popupDontShow) {
+            app.prefsDontWarn = true;
+            SaveDontWarnPref(true);
+        }
+    };
+
+    if (ImGui::Button("Enable Test Mode", ImVec2(140, 0))) {
+        DriverResult r = DriverControl::EnableTestSigning();
+        SetStatus(app, r);
+        commitPref();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Continue anyway", ImVec2(130, 0))) {
+        commitPref();
+        BeginLoad(app);
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Open guide", ImVec2(100, 0))) {
+        // Opens loader/TESTMODE.md if it sits next to the exe.
+        ShellExecuteW(nullptr, L"open", L"TESTMODE.md", nullptr, nullptr, SW_SHOWNORMAL);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+        commitPref();
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
 }
 
 // ===========================================================================
@@ -362,14 +461,21 @@ static void RenderUI(AppState& app, StarField& stars, float dt)
                 DriverResult stop = app.driver.Stop();
                 SetStatus(app, stop);
                 app.screen = Screen::Menu;
+            } else if (app.testSigning || app.prefsDontWarn) {
+                // Test Mode already on, or the user opted out of the reminder:
+                // load without nagging.
+                BeginLoad(app);
             } else {
-                app.screen = Screen::Loading;
-                app.screenT = 0;
-                app.loadProgress = 0.0f;
+                // First time / Test Mode off: inform, don't force.
+                app.popupDontShow = false;
+                ImGui::OpenPopup("Before loading##firstload");
             }
         }
         ImGui::PopStyleColor();
     }
+
+    // Draw the explainer popup (no-op unless opened above).
+    RenderFirstLoadPopup(app);
 
     // Status line.
     ImGui::Dummy(ImVec2(0, 10));
@@ -415,6 +521,7 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
     AppState app;
+    app.prefsDontWarn = LoadDontWarnPref();
     StarField stars;
     stars.Init(160, 720.0f, 720.0f);
 
