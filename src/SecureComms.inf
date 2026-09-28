@@ -1,0 +1,48 @@
+;
+; SecureComms.inf
+;
+; Installation INF for the SecureComms sample WDM driver.
+; Installs a non-PnP (legacy/software) kernel service that can be started
+; and stopped with sc.exe or the Service Control Manager.
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System
+ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider    = %ManufacturerName%
+CatalogFile = SecureComms.cat
+DriverVer   = ; set by stampinf / signtool during build
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 12          ; %windir%\System32\drivers
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+SecureComms.sys = 1,,
+
+[DefaultInstall.NT$ARCH$]
+CopyFiles = SecureComms.CopyFiles
+
+[SecureComms.CopyFiles]
+SecureComms.sys
+
+[DefaultInstall.NT$ARCH$.Services]
+AddService = SecureComms,0x00000002,SecureComms.Service   ; 0x2 = SPSVCINST_ASSOCSERVICE
+
+[SecureComms.Service]
+DisplayName   = %ServiceName%
+Description   = %ServiceDescription%
+ServiceType   = 1                       ; SERVICE_KERNEL_DRIVER
+StartType     = 3                       ; SERVICE_DEMAND_START
+ErrorControl  = 1                       ; SERVICE_ERROR_NORMAL
+ServiceBinary = %12%\SecureComms.sys
+
+[Strings]
+ManufacturerName   = "SecureComms Sample"
+DiskName           = "SecureComms Installation Disk"
+ServiceName        = "SecureComms Monitor Driver"
+ServiceDescription = "Sample secure user/kernel comms and process-creation monitor."

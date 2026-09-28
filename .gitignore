@@ -1,0 +1,19 @@
+# Build output
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.sys
+*.pdb
+*.obj
+*.exe
+*.cat
+*.lib
+*.log
+*.tlog
+*.ipdb
+*.iobj
+# VS user files
+*.user
+*.suo
+.vs/
