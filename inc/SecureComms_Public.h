@@ -1,5 +1,8 @@
 /*++
 
+    FOR EDUCATIONAL PURPOSES ONLY. Reference/learning template; not for
+    production use. Test only on systems you own or are authorized to test.
+
 Module Name:
 
     SecureComms_Public.h

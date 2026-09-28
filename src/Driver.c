@@ -1,5 +1,13 @@
 /*++
 
+    ========================================================================
+    FOR EDUCATIONAL PURPOSES ONLY.
+    Reference/learning template for Windows kernel driver architecture.
+    Not compiled, tested, or signed. Load only on a dedicated test VM with a
+    kernel debugger attached; a fault here bugchecks the whole machine. Use
+    only on systems you own or are explicitly authorized to test.
+    ========================================================================
+
 Module Name:
 
     Driver.c

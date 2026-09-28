@@ -1,5 +1,14 @@
 # SecureComms — Windows Kernel Driver Template
 
+> ⚠️ **FOR EDUCATIONAL PURPOSES ONLY.**
+> This project is a learning/reference template for studying Windows kernel
+> driver architecture. It is **not** a finished product: it has not been
+> compiled, tested, or signed. Load it **only** on a dedicated test VM with a
+> kernel debugger attached — a bug in kernel mode bugchecks (blue-screens) the
+> whole machine. Do not deploy it on production or personal systems. Use it
+> only on machines and in environments you own or are explicitly authorized to
+> test. You are responsible for complying with all applicable laws and policies.
+
 A production-shaped **WDM** sample driver demonstrating a secure user↔kernel
 communication channel and process-creation monitoring. It is written as a
 teaching/starter template: every user buffer is validated, every allocation is
