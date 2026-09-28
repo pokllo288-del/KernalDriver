@@ -9,6 +9,24 @@
 #include "DriverControl.h"
 #include <vector>
 
+// --- Minimal NtQuerySystemInformation declarations for code-integrity state.
+//     (Not in the Windows SDK headers; declared locally as documented.) ------
+extern "C" {
+typedef LONG NTSTATUS_;
+typedef NTSTATUS_ (NTAPI* PFN_NtQuerySystemInformation)(
+    ULONG SystemInformationClass, PVOID SystemInformation,
+    ULONG SystemInformationLength, PULONG ReturnLength);
+}
+namespace {
+constexpr ULONG kSystemCodeIntegrityInformation = 103;
+constexpr ULONG kCodeIntegrityOptionEnabled     = 0x01;
+constexpr ULONG kCodeIntegrityOptionTestSign    = 0x02;
+struct SYSTEM_CODEINTEGRITY_INFORMATION_ {
+    ULONG Length;
+    ULONG CodeIntegrityOptions;
+};
+}
+
 namespace {
 
 // Format a human-readable message for a Win32 error.
@@ -52,6 +70,52 @@ bool DriverControl::IsElevated()
         elevated = elev.TokenIsElevated != 0;
     CloseHandle(token);
     return elevated;
+}
+
+bool DriverControl::IsTestSigningEnabled()
+{
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll) return false;
+    auto fn = (PFN_NtQuerySystemInformation)
+                  GetProcAddress(ntdll, "NtQuerySystemInformation");
+    if (!fn) return false;
+
+    SYSTEM_CODEINTEGRITY_INFORMATION_ info{};
+    info.Length = sizeof(info);
+    ULONG ret = 0;
+    NTSTATUS_ st = fn(kSystemCodeIntegrityInformation, &info, sizeof(info), &ret);
+    if (st < 0) return false; // query failed; assume "off" so we warn the user
+    return (info.CodeIntegrityOptions & kCodeIntegrityOptionTestSign) != 0;
+}
+
+DriverResult DriverControl::EnableTestSigning()
+{
+    if (!IsElevated())
+        return { false, ERROR_ACCESS_DENIED,
+                 L"Run as Administrator to enable Test Mode." };
+
+    // Invoke the documented bcdedit command. CreateProcess so we can wait and
+    // read the exit code; no shell needed.
+    wchar_t cmd[] = L"bcdedit.exe /set testsigning on";
+    STARTUPINFOW si{}; si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessW(nullptr, cmd, nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
+        return Fail(GetLastError(), L"CreateProcess(bcdedit)");
+
+    WaitForSingleObject(pi.hProcess, 15000);
+    DWORD code = 1;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+
+    if (code == 0)
+        return { true, ERROR_SUCCESS,
+                 L"Test Mode set. REBOOT for it to take effect. "
+                 L"(If it failed, disable Secure Boot in UEFI first.)" };
+    return { false, ERROR_INVALID_FUNCTION,
+             L"bcdedit failed - likely Secure Boot is on. Disable Secure Boot "
+             L"in your UEFI/BIOS, then try again." };
 }
 
 DriverResult DriverControl::Install(const std::wstring& sysPath)

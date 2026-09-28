@@ -69,10 +69,19 @@ the four `.lib`s, and the embedded manifest are all that matter.)
 
 1. Build `SecureComms.sys` (see the repo root README) and put it next to
    `Starlite.exe`, or edit `app.sysPath` in `main.cpp` to its full path.
-2. On a **test VM** with test-signing on (unsigned drivers), launch
-   `Starlite.exe` — it self-elevates via the manifest.
-3. Click **LOAD**. The state chip should read *Protection ACTIVE*; **UNLOAD**
+2. **Enable Test Mode** so the unsigned driver can load — see
+   [`TESTMODE.md`](TESTMODE.md). Starlite also shows an amber banner with an
+   **"Enable Test Mode"** button whenever it detects Test Mode is off; click it,
+   then reboot.
+3. On a **test VM**, launch `Starlite.exe` — it self-elevates via the manifest.
+4. Click **LOAD**. The state chip should read *Protection ACTIVE*; **UNLOAD**
    stops it.
+
+> The driver is unsigned, so it will only load with **Test Mode on** (or a
+> one-time "disable driver signature enforcement" boot). Starlite detects this
+> via `NtQuerySystemInformation(SystemCodeIntegrityInformation)` and warns you.
+> This is the documented developer workflow — it affects only your own test
+> machine, not anyone else's security.
 
 ## Swapping in a real CS2 avatar
 

@@ -52,6 +52,19 @@ public:
 
     static bool  IsElevated();
 
+    // --- Test Signing (the supported way to load an unsigned/test driver on
+    //     your OWN machine). Requires elevation + a reboot to take effect. ---
+
+    // True if Windows is currently in test-signing mode (unsigned/test-signed
+    // kernel drivers are allowed). Returns false if it cannot determine state.
+    static bool  IsTestSigningEnabled();
+
+    // Runs `bcdedit /set testsigning on`. Needs elevation; a REBOOT is required
+    // afterwards. May fail if Secure Boot is enabled (must be disabled in UEFI
+    // firmware first). Purely a convenience wrapper around the documented
+    // bcdedit command the user could type themselves.
+    static DriverResult EnableTestSigning();
+
 private:
     std::wstring m_service;
     std::wstring m_display;

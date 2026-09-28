@@ -158,6 +158,10 @@ struct AppState {
     std::string  statusLine = "Idle";
     bool         statusError = false;
     DriverControl driver{ kServiceName, kDisplayName };
+
+    // Cached test-signing state (re-checked ~once/sec, not every frame).
+    bool         testSigning = false;
+    float        sigCheckT = 999.0f;
 };
 
 // Draw a stylized circular "CS2" avatar placeholder (swap for a real texture
@@ -199,6 +203,11 @@ static void RenderUI(AppState& app, StarField& stars, float dt)
 
     app.t += dt;
     app.screenT += dt;
+    app.sigCheckT += dt;
+    if (app.sigCheckT > 1.0f) {
+        app.testSigning = DriverControl::IsTestSigningEnabled();
+        app.sigCheckT = 0.0f;
+    }
     stars.Update(dt, W, H);
 
     // Full-screen background window (no decoration), painted first.
@@ -288,7 +297,32 @@ static void RenderUI(AppState& app, StarField& stars, float dt)
         default:                        stateText = "State unknown";      break;
     }
     ImGui::TextColored(stateCol, "  %s", stateText);
-    ImGui::Dummy(ImVec2(0, 12));
+    ImGui::Dummy(ImVec2(0, 8));
+
+    // ---- Test-signing warning ---------------------------------------------
+    // An unsigned/test driver only loads when Windows is in Test Mode. If it
+    // is off, warn and offer to enable it (documented bcdedit command).
+    if (!app.testSigning) {
+        ImVec2 wp = ImGui::GetCursorScreenPos();
+        float ww = cardSize.x - 60;
+        dl->AddRectFilled(wp, ImVec2(wp.x + ww, wp.y + 76),
+                          IM_COL32(90, 50, 30, 160), 8.0f);
+        ImGui::Indent(6);
+        ImGui::PushTextWrapPos(30 + ww);
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.4f, 1.0f),
+                           "Test Mode is OFF - an unsigned driver will not load.");
+        ImGui::PopTextWrapPos();
+        if (ImGui::SmallButton("Enable Test Mode (needs reboot)")) {
+            DriverResult r = DriverControl::EnableTestSigning();
+            SetStatus(app, r);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("then reboot");
+        ImGui::Unindent(6);
+        ImGui::Dummy(ImVec2(0, 82));
+    } else {
+        ImGui::Dummy(ImVec2(0, 4));
+    }
 
     // ---- LOAD button + loading animation ----------------------------------
     const ImVec2 btnSize(cardSize.x - 60, 52);
