@@ -17,3 +17,8 @@ x86/
 *.user
 *.suo
 .vs/
+
+# Loader third-party + build
+loader/third_party/
+loader/*.exe
+loader/*.obj
