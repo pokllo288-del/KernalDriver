@@ -2,8 +2,9 @@
 
 A simple, minimal Minecraft: Java Edition launcher.
 
-**See it in your browser:** open [`docs/preview.html`](docs/preview.html), an interactive
-mock-up of every screen (downloads and sign-in are simulated there).
+**See the loader design:** open [`docs/preview.html`](docs/preview.html) in a browser.
+It's an interactive mock-up (intro animation, version, player, Load); downloads
+and sign-in are simulated there.
 
 | Library | Version |
 |---|---|
