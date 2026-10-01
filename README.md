@@ -1,115 +1,71 @@
-# SecureComms — Windows Kernel Driver Template
+# Starlite
 
-> ⚠️ **FOR EDUCATIONAL PURPOSES ONLY.**
-> This project is a learning/reference template for studying Windows kernel
-> driver architecture. It is **not** a finished product: it has not been
-> compiled, tested, or signed. Load it **only** on a dedicated test VM with a
-> kernel debugger attached — a bug in kernel mode bugchecks (blue-screens) the
-> whole machine. Do not deploy it on production or personal systems. Use it
-> only on machines and in environments you own or are explicitly authorized to
-> test. You are responsible for complying with all applicable laws and policies.
+A simple, minimal Minecraft: Java Edition launcher.
 
-A production-shaped **WDM** sample driver demonstrating a secure user↔kernel
-communication channel and process-creation monitoring. It is written as a
-teaching/starter template: every user buffer is validated, every allocation is
-tagged, synchronization is explicit, and the load/unload paths are race-free.
+| Library | Version |
+|---|---|
+| ![Library](docs/library.png) | ![Downloading 1.21.11](docs/download.png) |
 
-> **Scope & intent.** This is a *defensive/observability* template. It monitors
-> process creation the same way an EDR sensor or audit tool does, using the
-> documented `PsSetCreateProcessNotifyRoutineEx` API. It contains no hiding,
-> tampering, or evasion behavior.
+## How it works
 
-## Layout
+1. **Library**: the Minecraft card. Press **Activate**, then **Load**.
+2. **Version**: shows **1.21.11**. Press **Load** to download every file the
+   game needs. You can cancel at any time and pressing Load again resumes.
+
+What gets downloaded (all from Mojang's official servers, every file
+SHA-1 verified):
+
+| What | Where |
+|---|---|
+| Version JSON + client jar | `versions/1.21.11/` |
+| Libraries (incl. natives for your OS) | `libraries/` |
+| Asset index + ~4,600 asset objects | `assets/indexes/`, `assets/objects/` |
+| Logging config | `assets/log_configs/` |
+
+About 530 MB in total. The layout matches the vanilla `.minecraft` folder.
+Files that are already present and valid are skipped, so re-running only
+re-verifies.
+
+Install location (separate from your official `.minecraft`):
+
+| OS | Path |
+|---|---|
+| Windows | `%APPDATA%\.starlite` |
+| macOS | `~/Library/Application Support/starlite` |
+| Linux | `~/.starlite` |
+
+## Run
+
+Requires Python 3.10+ and nothing else (standard library only, UI is tkinter).
+
+```
+python -m starlite
+```
+
+Terminal-only download:
+
+```
+python -m starlite --no-gui --version 1.21.11 --dir ./mc
+```
+
+Tests:
+
+```
+python -m unittest discover -s tests
+```
+
+> On Linux, tkinter may need `sudo apt install python3-tk`.
+
+## Project layout
 
 | Path | Purpose |
-|------|---------|
-| `inc/SecureComms_Public.h` | Shared ABI: device names, IOCTL codes, request/response structs (included by driver **and** client). |
-| `src/Driver.h`             | Kernel-only internal declarations (device extension, ring buffer, prototypes). |
-| `src/Driver.c`             | Driver implementation: `DriverEntry`, dispatch, IOCTL handlers, notify callback, unload. |
-| `src/SecureComms.inf`      | Install INF for a demand-start kernel service. |
-| `src/SecureComms.vcxproj`  | VS + WDK project file. |
-| `client/Client.c`          | User-mode demonstration client. |
+|---|---|
+| `starlite/minecraft.py` | Download engine: manifest, libraries, assets, parallel downloads, checksums, retries. |
+| `starlite/app.py` | Launcher UI (Library → Version screens). |
+| `starlite/__main__.py` | Entry point and `--no-gui` mode. |
+| `tests/` | Unit tests for rule evaluation and file resolution. |
 
-## Architecture
+## Not yet included
 
-### 1. Secure device object & symbolic link
-`DriverEntry` calls **`IoCreateDeviceSecure`** with an explicit SDDL string:
-
-```
-D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GR;;;AU)
-```
-
-— full access to SYSTEM and Administrators, read-only to authenticated users.
-`FILE_DEVICE_SECURE_OPEN` extends the check to opens with a trailing path. A
-symbolic link (`\DosDevices\SecureComms`) exposes the device to Win32 as
-`\\.\SecureComms`. `DriverUnload` tears everything down in the correct order.
-
-### 2. IOCTL dispatcher (`METHOD_BUFFERED`)
-Handlers for `IRP_MJ_CREATE`, `IRP_MJ_CLOSE`, and `IRP_MJ_DEVICE_CONTROL`.
-Each IOCTL validates `InputBufferLength` / `OutputBufferLength` against the
-declared structure sizes with **overflow-safe** arithmetic before touching a
-byte, checks a protocol-version field, and completes the IRP with an accurate
-`IoStatus.Information`. Control codes that mutate state require
-`FILE_WRITE_ACCESS`.
-
-| IOCTL | Access | Meaning |
-|-------|--------|---------|
-| `GET_VERSION`     | read  | protocol version + counters |
-| `ECHO`            | any   | length-checked round-trip |
-| `SET_MONITORING`  | write | enable/disable the notify callback's effect |
-| `DRAIN_EVENTS`    | read  | copy buffered process events to caller |
-
-### 3. Process-creation callback
-Registered once via `PsSetCreateProcessNotifyRoutineEx`. It reads the enable
-flag without blocking, copies the image name with `RtlStringCchCopyNW`
-(truncation-safe on a counted, possibly non-terminated source), and enqueues an
-event under a spinlock. It is **not** paged and makes no blocking calls, so it
-is correct at both `PASSIVE_LEVEL` and `APC_LEVEL`. Unregistration in
-`DriverUnload` (with `Remove == TRUE`) guarantees no callback is running before
-the device extension is freed.
-
-### 4. Memory & synchronization
-* `#pragma alloc_text` marks `DriverEntry` `INIT` and the PASSIVE-only handlers
-  `PAGE`; the callback and ring producer stay resident.
-* **`KSPIN_LOCK`** guards the hot-path event ring (producer = callback,
-  consumer = drain IOCTL).
-* **`FAST_MUTEX`** guards cold-path configuration state (PASSIVE only).
-* Counters use interlocked ops.
-* All copies use bounded primitives (`RtlMoveMemory` for the overlap-capable
-  buffered-IOCTL echo, `RtlStringCchCopyNW` for strings) with explicit null and
-  length checks.
-
-## Building
-
-Install **Visual Studio 2022** + the matching **WDK** and Spectre-mitigated
-libraries, then either open `src/SecureComms.vcxproj` or run from a Developer
-Command Prompt:
-
-```
-msbuild src\SecureComms.vcxproj /p:Configuration=Release /p:Platform=x64
-```
-
-Output: `SecureComms.sys` (+ `.inf`, and a `.cat` if you stamp/sign it).
-
-## Installing & testing (test machine only)
-
-Kernel drivers must be signed for production. On a **dedicated test VM**, enable
-test signing and load the demand-start service:
-
-```
-bcdedit /set testsigning on          :: then reboot
-sc create SecureComms type= kernel binPath= C:\path\SecureComms.sys
-sc start  SecureComms
-Client.exe 10                         :: run elevated
-sc stop   SecureComms
-sc delete SecureComms
-```
-
-Use a VM with a kernel debugger attached; a bug here bugchecks the machine.
-
-## Notes / hardening ideas
-
-* Add a per-handle `FILE_OBJECT` context if you need per-client event queues.
-* Consider `PsSetCreateProcessNotifyRoutineEx2` for richer info on modern OSes.
-* For high event rates, replace the fixed ring with a lookaside-backed queue and
-  signal an event so clients can wait instead of poll.
+* Starting the game (needs a Java 21 runtime and Microsoft account sign-in).
+* Other versions; the engine supports any version ID, the UI shows 1.21.11.
