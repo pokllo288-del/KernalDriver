@@ -3,6 +3,7 @@
 Screens:
   1. Library  - the Minecraft game card with Activate / Load.
   2. Versions - Minecraft 1.21.11 with a Load button that downloads every file.
+  3. Account  - pick a player name, or sign in with a Microsoft account.
 """
 
 from __future__ import annotations
@@ -14,9 +15,12 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import ttk
 
+from .auth import (Account, AuthCancelled, AuthError, DeviceCode, MicrosoftAuth,
+                   offline_account)
 from .minecraft import DownloadCancelled, MinecraftInstaller, Progress
 
 APP_NAME = "Starlite"
@@ -35,6 +39,7 @@ ACCENT_TEXT = "#0b1a10"
 DANGER = "#ff6b6b"
 
 FONT = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+MONO = "Consolas" if sys.platform == "win32" else "Courier"
 
 
 def font(size: int, weight: str = "normal") -> tuple:
@@ -75,6 +80,65 @@ class Button(tk.Label):
         self.configure(text=text)
 
 
+class MinecraftButton(tk.Canvas):
+    """A button drawn like Minecraft's menu buttons: grey stone, bevelled edges, shadowed text."""
+
+    FACE, FACE_HOVER = "#6f6f6f", "#7d7d7d"
+    LIGHT, DARK, OUTLINE = "#a9a9a9", "#4b4b4b", "#000000"
+
+    def __init__(self, master, text: str, command, width: int = 320, height: int = 44,
+                 microsoft_logo: bool = False, bg: str = SURFACE):
+        super().__init__(master, width=width, height=height, bg=bg, highlightthickness=0,
+                         cursor="hand2")
+        self.text, self.command, self.logo = text, command, microsoft_logo
+        self.w, self.h = width, height
+        self.enabled = True
+        self._draw()
+        self.bind("<Enter>", lambda _e: self._draw(hover=True))
+        self.bind("<Leave>", lambda _e: self._draw())
+        self.bind("<Button-1>", lambda _e: self.enabled and self.command())
+
+    def _draw(self, hover: bool = False) -> None:
+        self.delete("all")
+        w, h = self.w, self.h
+        hover = hover and self.enabled
+        self.create_rectangle(0, 0, w - 1, h - 1, fill=self.OUTLINE, outline=self.OUTLINE)
+        face = "#4a4a4a" if not self.enabled else (self.FACE_HOVER if hover else self.FACE)
+        self.create_rectangle(2, 2, w - 3, h - 3, fill=face, outline=face)
+        if self.enabled:
+            # light top-left bevel, dark bottom-right bevel
+            self.create_rectangle(2, 2, w - 3, 3, fill=self.LIGHT, outline="")
+            self.create_rectangle(2, 2, 3, h - 3, fill=self.LIGHT, outline="")
+            self.create_rectangle(2, h - 6, w - 3, h - 3, fill=self.DARK, outline="")
+            self.create_rectangle(w - 4, 2, w - 3, h - 3, fill=self.DARK, outline="")
+        if hover:
+            self.create_rectangle(1, 1, w - 2, h - 2, outline="#ffffff", width=2)
+
+        fg = "#ffffa0" if hover else ("#ffffff" if self.enabled else "#a0a0a0")
+        text_font = (MONO, 12, "bold")
+        cx, cy = w // 2, h // 2 - 1
+        probe = self.create_text(0, 0, text=self.text, font=text_font, anchor="nw")
+        x1, _, x2, _ = self.bbox(probe)
+        self.delete(probe)
+        text_w = x2 - x1
+        logo_w = 28 if self.logo else 0
+        start = cx - (text_w + logo_w) // 2
+        if self.logo:
+            s, gap, top = 7, 2, cy - 8
+            for i, color in enumerate(("#f25022", "#7fba00", "#00a4ef", "#ffb900")):
+                x = start + (i % 2) * (s + gap)
+                y = top + (i // 2) * (s + gap)
+                self.create_rectangle(x, y, x + s, y + s, fill=color, outline="")
+        tx = start + logo_w
+        self.create_text(tx + 2, cy + 2, text=self.text, font=text_font, fill="#3f3f3f", anchor="w")
+        self.create_text(tx, cy, text=self.text, font=text_font, fill=fg, anchor="w")
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.configure(cursor="hand2" if enabled else "arrow")
+        self._draw()
+
+
 class StarliteApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -83,10 +147,15 @@ class StarliteApp:
         self.settings = self._load_settings()
         self.events: "queue.Queue[tuple]" = queue.Queue()
         self.worker: threading.Thread | None = None
+        self.account = Account.from_settings(self.settings.get("account"))
+        self.auth_cancel = threading.Event()
+        self.auth_worker: threading.Thread | None = None
+        self.device_code: DeviceCode | None = None
+        self.current_screen = None
 
         root.title(APP_NAME)
-        root.geometry("760x480")
-        root.minsize(640, 420)
+        root.geometry("760x600")
+        root.minsize(640, 600)
         root.configure(bg=BG)
         root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -114,6 +183,8 @@ class StarliteApp:
         try:
             self.settings_path.parent.mkdir(parents=True, exist_ok=True)
             self.settings_path.write_text(json.dumps(self.settings, indent=2), encoding="utf-8")
+            if os.name == "posix":
+                os.chmod(self.settings_path, 0o600)  # may hold a Microsoft refresh token
         except OSError:
             pass
 
@@ -131,7 +202,31 @@ class StarliteApp:
                  font=font(13, "bold")).pack(side="left")
         tk.Label(header, text="Launcher", fg=MUTED, bg=BG, font=font(11)).pack(side="left", padx=8)
 
+        self.account_chip = tk.Frame(header, bg=SURFACE_HI, cursor="hand2")
+        self.account_chip.pack(side="right")
+        self.chip_avatar = tk.Label(self.account_chip, font=font(9, "bold"), width=2,
+                                    fg=ACCENT_TEXT, cursor="hand2")
+        self.chip_avatar.pack(side="left", padx=(6, 0), pady=5)
+        self.chip_name = tk.Label(self.account_chip, bg=SURFACE_HI, fg=TEXT, font=font(10),
+                                  padx=8, cursor="hand2")
+        self.chip_name.pack(side="left", padx=(0, 4))
+        for widget in (self.account_chip, self.chip_avatar, self.chip_name):
+            widget.bind("<Button-1>", lambda _e: self.show_account())
+        self._refresh_account_chip()
+
+    def _refresh_account_chip(self) -> None:
+        if self.account:
+            self.chip_avatar.configure(text=self.account.name[0].upper(),
+                                       bg=ACCENT if self.account.type == "microsoft" else "#c9a227")
+            self.chip_name.configure(text=self.account.name)
+        else:
+            self.chip_avatar.configure(text="?", bg=BORDER, fg=MUTED)
+            self.chip_name.configure(text="Set player")
+            return
+        self.chip_avatar.configure(fg=ACCENT_TEXT)
+
     def _clear(self) -> None:
+        self.current_screen = None
         for child in self.body.winfo_children():
             child.destroy()
 
@@ -162,6 +257,7 @@ class StarliteApp:
 
     def show_library(self) -> None:
         self._clear()
+        self.current_screen = self.show_library
         tk.Label(self.body, text="Library", fg=TEXT, bg=BG, font=font(20, "bold"),
                  anchor="w").pack(fill="x")
         tk.Label(self.body, text="Select a game to get started.", fg=MUTED, bg=BG,
@@ -208,6 +304,7 @@ class StarliteApp:
 
     def show_versions(self) -> None:
         self._clear()
+        self.current_screen = self.show_versions
 
         back = tk.Label(self.body, text="← Library", fg=MUTED, bg=BG, font=font(10),
                         cursor="hand2", anchor="w")
@@ -296,6 +393,183 @@ class StarliteApp:
         except Exception as exc:  # surface any failure in the UI
             self.events.put(("error", str(exc)))
 
+    # -- screen 3: account --------------------------------------------------
+
+    def show_account(self) -> None:
+        if self.worker and self.worker.is_alive():
+            return  # keep the download screen visible while downloading
+        if self.current_screen is not None and self.current_screen != self.show_account:
+            self.return_to = self.current_screen
+        self._clear()
+        self.current_screen = self.show_account
+
+        back = tk.Label(self.body, text="← Back", fg=MUTED, bg=BG, font=font(10),
+                        cursor="hand2", anchor="w")
+        back.pack(fill="x")
+        back.bind("<Button-1>", lambda _e: self._leave_account())
+
+        tk.Label(self.body, text="Account", fg=TEXT, bg=BG, font=font(20, "bold"),
+                 anchor="w").pack(fill="x", pady=(6, 0))
+        tk.Label(self.body, text="Choose how you appear in game.", fg=MUTED, bg=BG,
+                 font=font(11), anchor="w").pack(fill="x", pady=(2, 16))
+
+        if self.device_code:
+            self._show_device_code(self.device_code)
+            return
+
+        if self.account:
+            outer, card = self._card(self.body)
+            card.configure(pady=14)
+            outer.pack(fill="x", pady=(0, 12))
+            kind = "Microsoft account" if self.account.type == "microsoft" else "Offline player"
+            tk.Label(card, text=self.account.name, fg=TEXT, bg=SURFACE, font=font(15, "bold"),
+                     anchor="w").pack(side="left")
+            tk.Label(card, text=f"  ·  {kind}", fg=MUTED, bg=SURFACE, font=font(10)).pack(side="left")
+            Button(card, "Sign out", self._sign_out, primary=False, width=9).pack(side="right")
+
+        # Option 1: just a player name
+        outer, card = self._card(self.body)
+        outer.pack(fill="x")
+        tk.Label(card, text="Player name", fg=TEXT, bg=SURFACE, font=font(12, "bold"),
+                 anchor="w").pack(fill="x")
+        tk.Label(card, text="Play offline with any name (3-16 letters, numbers or _).",
+                 fg=MUTED, bg=SURFACE, font=font(10), anchor="w").pack(fill="x", pady=(2, 10))
+        row = tk.Frame(card, bg=SURFACE)
+        row.pack(fill="x")
+        self.name_var = tk.StringVar(
+            value=self.account.name if self.account and self.account.type == "offline" else "")
+        entry_border = tk.Frame(row, bg=BORDER)
+        entry_border.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        entry = tk.Entry(entry_border, textvariable=self.name_var, font=font(12), bg=SURFACE_HI,
+                         fg=TEXT, insertbackground=TEXT, relief="flat", highlightthickness=0)
+        entry.pack(fill="x", padx=1, pady=1, ipady=8, ipadx=8)
+        entry.bind("<Return>", lambda _e: self._save_player_name())
+        Button(row, "Save", self._save_player_name, width=8).pack(side="right")
+        self.name_error = tk.Label(card, text="", fg=DANGER, bg=SURFACE, font=font(9), anchor="w")
+
+        tk.Label(self.body, text="or", fg=MUTED, bg=BG, font=font(10)).pack(pady=10)
+
+        # Option 2: Microsoft account
+        ms = tk.Frame(self.body, bg=BG)
+        ms.pack()
+        MinecraftButton(ms, "Sign in with Microsoft", self._start_microsoft_login,
+                        microsoft_logo=True, bg=BG).pack()
+        self.auth_status = tk.Label(self.body, text="Use the account that owns Minecraft.",
+                                    fg=MUTED, bg=BG, font=font(9))
+        self.auth_status.pack(pady=(8, 0))
+
+    def _leave_account(self) -> None:
+        self._cancel_microsoft_login()
+        (getattr(self, "return_to", None) or self.show_library)()
+
+    def _set_account(self, account: Account | None) -> None:
+        self.account = account
+        if account:
+            self.settings["account"] = account.to_settings()
+        else:
+            self.settings.pop("account", None)
+        self._save_settings()
+        self._refresh_account_chip()
+
+    def _save_player_name(self) -> None:
+        try:
+            account = offline_account(self.name_var.get().strip())
+        except AuthError as err:
+            self.name_error.configure(text=str(err))
+            self.name_error.pack(fill="x", pady=(6, 0))
+            return
+        self._set_account(account)
+        self._leave_account()
+
+    def _sign_out(self) -> None:
+        self._set_account(None)
+        self.show_account()
+
+    def _client_id(self) -> str:
+        return os.environ.get("STARLITE_MS_CLIENT_ID") or self.settings.get("ms_client_id", "")
+
+    def _start_microsoft_login(self) -> None:
+        if self.auth_worker and self.auth_worker.is_alive():
+            return
+        try:
+            auth = MicrosoftAuth(self._client_id())
+        except AuthError as err:
+            self.auth_status.configure(text=str(err), fg=DANGER)
+            return
+        self.auth_status.configure(text="Contacting Microsoft…", fg=MUTED)
+        self.auth_cancel.clear()
+        self.device_code = None
+        self.auth_worker = threading.Thread(target=self._auth_worker, args=(auth,), daemon=True)
+        self.auth_worker.start()
+
+    def _auth_worker(self, auth: MicrosoftAuth) -> None:
+        try:
+            code = auth.start()
+            self.events.put(("auth_code", code))
+            self.events.put(("auth_done", auth.wait(code, self.auth_cancel)))
+        except AuthCancelled:
+            self.events.put(("auth_cancelled", None))
+        except AuthError as err:
+            self.events.put(("auth_error", str(err)))
+        except Exception as err:  # unexpected response shape, etc.
+            self.events.put(("auth_error", f"Sign-in failed: {err}"))
+
+    def _cancel_microsoft_login(self) -> None:
+        self.auth_cancel.set()
+        self.device_code = None
+
+    def _show_device_code(self, code: DeviceCode) -> None:
+        outer, card = self._card(self.body)
+        outer.pack(fill="x")
+        tk.Label(card, text="Sign in with Microsoft", fg=TEXT, bg=SURFACE, font=font(12, "bold"),
+                 anchor="w").pack(fill="x")
+        tk.Label(card, text=f"1. Open {code.verification_uri}\n2. Enter this code and approve:",
+                 fg=MUTED, bg=SURFACE, font=font(10), anchor="w", justify="left").pack(fill="x",
+                                                                                     pady=(4, 10))
+        tk.Label(card, text=code.user_code, fg=ACCENT, bg=SURFACE_HI, font=(MONO, 24, "bold"),
+                 pady=8).pack(fill="x")
+        row = tk.Frame(card, bg=SURFACE)
+        row.pack(fill="x", pady=(14, 0))
+        Button(row, "Open page", lambda: webbrowser.open(code.verification_uri),
+               width=11).pack(side="left")
+        Button(row, "Copy code", lambda: self._copy(code.user_code), primary=False,
+               width=11).pack(side="left", padx=10)
+        Button(row, "Cancel", self._on_cancel_login, primary=False, width=9).pack(side="right")
+        self.auth_status = tk.Label(self.body, text="Waiting for you to approve in the browser…",
+                                    fg=MUTED, bg=BG, font=font(9))
+        self.auth_status.pack(pady=(10, 0))
+
+    def _on_cancel_login(self) -> None:
+        self._cancel_microsoft_login()
+        self.show_account()
+
+    def _copy(self, text: str) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.auth_status.configure(text="Code copied.", fg=MUTED)
+
+    def _handle_auth_event(self, kind: str, payload) -> None:
+        on_account = self.current_screen == self.show_account
+        if kind == "auth_code":
+            if self.auth_cancel.is_set():
+                return
+            self.device_code = payload
+            if on_account:
+                self.show_account()
+            webbrowser.open(payload.verification_uri)
+        elif kind == "auth_done":
+            self.device_code = None
+            self._set_account(payload)
+            if on_account:
+                self._leave_account()
+        elif kind == "auth_cancelled":
+            self.device_code = None
+        elif kind == "auth_error":
+            self.device_code = None
+            if on_account:
+                self.show_account()
+                self.auth_status.configure(text=str(payload), fg=DANGER)
+
     # -- worker -> UI -------------------------------------------------------
 
     def _drain_events(self) -> None:
@@ -308,6 +582,9 @@ class StarliteApp:
         self.root.after(50, self._drain_events)
 
     def _handle_event(self, kind: str, payload) -> None:
+        if kind.startswith("auth_"):
+            self._handle_auth_event(kind, payload)
+            return
         if not hasattr(self, "status") or not self.status.winfo_exists():
             return
         if kind == "progress":
@@ -345,6 +622,7 @@ class StarliteApp:
 
     def _on_close(self) -> None:
         self.installer.cancel()
+        self.auth_cancel.set()
         self.root.destroy()
 
 

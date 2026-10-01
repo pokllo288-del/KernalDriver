@@ -11,6 +11,42 @@ A simple, minimal Minecraft: Java Edition launcher.
 1. **Library**: the Minecraft card. Press **Activate**, then **Load**.
 2. **Version**: shows **1.21.11**. Press **Load** to download every file the
    game needs. You can cancel at any time and pressing Load again resumes.
+3. **Account**: click the chip in the top-right corner (**Set player**).
+
+## Account
+
+| Choose a name or sign in | Microsoft sign-in |
+|---|---|
+| ![Account](docs/account.png) | ![Microsoft code](docs/microsoft-signin.png) |
+
+* **Player name**: type any name (3-16 letters, numbers or `_`) and press
+  **Save**. This is an offline player. The UUID is generated the same way the
+  game does for offline players.
+* **Sign in with Microsoft** (the Minecraft-style button): Starlite shows a
+  short code and opens `microsoft.com/link`. Enter the code and approve, and
+  the launcher signs you in through Microsoft → Xbox Live → Minecraft and
+  shows your real Minecraft name. It checks that the account owns
+  Java Edition.
+
+### Enabling Microsoft sign-in
+
+Microsoft only allows Minecraft sign-in through an app ID that Mojang has
+approved, so each launcher needs its own:
+
+1. In the [Azure portal](https://portal.azure.com) → *App registrations* →
+   *New registration*. Choose **Personal Microsoft accounts only**.
+2. Under *Authentication*, set **Allow public client flows** to **Yes**.
+3. Request Minecraft API access for that app ID from Mojang
+   (form: <https://aka.ms/mce-reviewappid>). Until it's approved, sign-in
+   stops with "This app ID isn't approved for the Minecraft API yet".
+4. Give Starlite the *Application (client) ID*, either as an environment
+   variable `STARLITE_MS_CLIENT_ID=<id>` or as `"ms_client_id": "<id>"` in
+   `launcher.json` inside the install folder.
+
+The chosen account is saved in `launcher.json`. For Microsoft accounts this
+includes a refresh token so you stay signed in, so keep that file private
+(on macOS/Linux it is written with owner-only permissions). **Sign out**
+removes it.
 
 What gets downloaded (all from Mojang's official servers, every file
 SHA-1 verified):
@@ -61,11 +97,12 @@ python -m unittest discover -s tests
 | Path | Purpose |
 |---|---|
 | `starlite/minecraft.py` | Download engine: manifest, libraries, assets, parallel downloads, checksums, retries. |
-| `starlite/app.py` | Launcher UI (Library → Version screens). |
+| `starlite/app.py` | Launcher UI (Library, Version and Account screens). |
+| `starlite/auth.py` | Offline player names and Microsoft → Xbox → Minecraft sign-in. |
 | `starlite/__main__.py` | Entry point and `--no-gui` mode. |
-| `tests/` | Unit tests for rule evaluation and file resolution. |
+| `tests/` | Unit tests for downloads and accounts (sign-in flow is mocked). |
 
 ## Not yet included
 
-* Starting the game (needs a Java 21 runtime and Microsoft account sign-in).
+* Starting the game (needs a Java 21 runtime; the account is ready for it).
 * Other versions; the engine supports any version ID, the UI shows 1.21.11.
