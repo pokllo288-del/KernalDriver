@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foresight Preview</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --surface: #16181d;
+    --surface-hi: #1d2027;
+    --border: #262a33;
+    --text: #e8eaed;
+    --muted: #8a909c;
+    --disabled: #4b505b;
+    --accent: #3ddc84;
+    --accent-hi: #5ae89a;
+    --accent-text: #0b1a10;
+    --danger: #ff6b6b;
+    --page: #08090b;
+    --font: "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: Consolas, "Courier New", Courier, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+  .note {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 16px;
+    text-align: center;
+  }
+
+  /* Window chrome */
+  .window {
+    width: 100%;
+    max-width: 760px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+  .titlebar {
+    display: flex; align-items: center; gap: 8px;
+    height: 34px; padding: 0 12px;
+    background: #121317; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+  }
+  .titlebar .dots { display: flex; gap: 6px; }
+  .titlebar .dots i { width: 11px; height: 11px; border-radius: 50%; background: #2c3039; display: block; }
+  .titlebar span { margin: 0 auto; transform: translateX(-24px); }
+
+  .app { min-height: 566px; padding: 24px 32px 28px; display: flex; flex-direction: column; }
+
+  /* Header */
+  header { display: flex; align-items: center; margin-bottom: 16px; }
+  .logo { color: var(--accent); font-size: 16px; }
+  .brand { font-weight: 700; font-size: 17px; letter-spacing: .02em; margin-left: 6px; }
+  .tag { color: var(--muted); font-size: 14px; margin-left: 10px; }
+  .chip {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    background: var(--surface-hi); padding: 5px 12px 5px 6px; cursor: pointer;
+    font-size: 13px; border: 0; color: var(--text); font-family: inherit;
+  }
+  .chip:hover { background: var(--border); }
+  .avatar {
+    width: 20px; height: 20px; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; background: var(--border); color: var(--muted);
+  }
+  .avatar.offline { background: #c9a227; color: var(--accent-text); }
+  .avatar.microsoft { background: var(--accent); color: var(--accent-text); }
+
+  /* Typography */
+  h1 { font-size: 26px; margin: 6px 0 0; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 14px; margin: 4px 0 20px; }
+  .back {
+    color: var(--muted); font-size: 13px; background: none; border: 0; padding: 0;
+    cursor: pointer; font-family: inherit; align-self: flex-start;
+  }
+  .back:hover { color: var(--text); }
+  .back[disabled] { color: var(--disabled); cursor: default; }
+
+  /* Card */
+  .card { background: var(--surface); border: 1px solid var(--border); padding: 22px 24px; }
+  .card + .card { margin-top: 12px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grow { flex: 1; min-width: 0; }
+
+  .game-icon {
+    width: 72px; height: 72px; flex: none; image-rendering: pixelated;
+    display: grid; grid-template-columns: repeat(8, 1fr);
+  }
+  .game-title { font-size: 22px; font-weight: 700; }
+  .game-sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .status {
+    display: inline-block; margin-top: 10px; padding: 2px 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: .03em;
+    background: var(--surface-hi); color: var(--muted);
+  }
+  .status.on { background: #14301f; color: var(--accent); }
+
+  /* Flat buttons */
+  .btn {
+    font-family: inherit; font-size: 14px; font-weight: 700;
+    border: 0; padding: 11px 0; min-width: 110px; cursor: pointer;
+    background: var(--accent); color: var(--accent-text);
+  }
+  .btn:hover { background: var(--accent-hi); }
+  .btn.secondary { background: var(--surface-hi); color: var(--text); }
+  .btn.secondary:hover { background: var(--border); }
+  .btn[disabled] { background: var(--surface-hi); color: var(--disabled); cursor: default; }
+
+  /* Version screen */
+  .version { font-size: 22px; font-weight: 700; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .bar { height: 6px; background: var(--surface-hi); margin: 20px 0 10px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .1s linear; }
+  .progress-text { font-size: 13px; color: var(--muted); }
+  .progress-text.ok { color: var(--accent); }
+  .progress-text.err { color: var(--danger); }
+  .footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; font-size: 12px; color: var(--muted); }
+  .footer a { color: var(--accent); text-decoration: none; cursor: pointer; }
+
+  /* Account screen */
+  .label { font-weight: 700; font-size: 15px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 3px 0 12px; }
+  .input {
+    width: 100%; font: 15px var(--font); color: var(--text);
+    background: var(--surface-hi); border: 1px solid var(--border);
+    padding: 10px 12px; outline: none;
+  }
+  .input:focus { border-color: var(--accent); }
+  .error { color: var(--danger); font-size: 12px; margin-top: 8px; min-height: 0; }
+  .or { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0; }
+  .center { display: flex; flex-direction: column; align-items: center; }
+  .small { font-size: 12px; color: var(--muted); margin-top: 10px; text-align: center; }
+  .small.err { color: var(--danger); }
+
+  /* Minecraft-style button */
+  .mc {
+    position: relative; width: 320px; max-width: 100%; height: 44px;
+    border: 2px solid #000; background: #6f6f6f; cursor: pointer;
+    box-shadow: inset 2px 2px 0 #a9a9a9, inset -2px -4px 0 #4b4b4b;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    font: 700 16px var(--mono); color: #fff; text-shadow: 2px 2px 0 #3f3f3f;
+    padding: 0 0 2px;
+  }
+  .mc:hover { background: #7d7d7d; color: #ffffa0; outline: 2px solid #fff; outline-offset: -3px; }
+  .ms-logo { display: grid; grid-template-columns: 7px 7px; gap: 2px; }
+  .ms-logo i { width: 7px; height: 7px; display: block; }
+
+  .code {
+    background: var(--surface-hi); color: var(--accent);
+    font: 700 32px var(--mono); text-align: center; padding: 10px; letter-spacing: .04em;
+  }
+  .steps { color: var(--muted); font-size: 13px; margin: 6px 0 12px; line-height: 1.5; }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 600px) {
+    .app { padding: 20px 16px; min-height: 0; }
+    .lib-row { flex-wrap: wrap; }
+    .lib-actions { width: 100%; }
+    .lib-actions .btn { flex: 1; }
+    .tag { display: none; }
+    .footer { flex-direction: column; }
+    .code { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<p class="note">Interactive preview of the Foresight launcher. Downloads and sign-in are simulated here.</p>
+
+<div class="window" role="application" aria-label="Foresight launcher preview">
+  <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><span>Foresight</span></div>
+
+  <div class="app">
+    <header>
+      <span class="logo">◉</span>
+      <span class="brand">FORESIGHT</span>
+      <span class="tag">Launcher</span>
+      <button class="chip" id="chip" type="button">
+        <span class="avatar" id="chipAvatar">?</span>
+        <span id="chipName">Set player</span>
+      </button>
+    </header>
+
+    <!-- Screen 1: Library -->
+    <section id="library">
+      <h1>Library</h1>
+      <p class="sub">Select a game to get started.</p>
+      <div class="card">
+        <div class="row lib-row" style="gap:20px">
+          <div class="game-icon" id="gameIcon" aria-hidden="true"></div>
+          <div class="grow">
+            <div class="game-title">Minecraft</div>
+            <div class="game-sub">Java Edition</div>
+            <span class="status" id="libStatus">INACTIVE</span>
+          </div>
+          <div class="row lib-actions">
+            <button class="btn secondary" id="activateBtn" type="button">Activate</button>
+            <button class="btn" id="libLoadBtn" type="button" disabled>Load</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen 2: Version -->
+    <section id="versions" class="hidden">
+      <button class="back" id="versionsBack" type="button">← Library</button>
+      <h1>Minecraft</h1>
+      <p class="sub">Choose a version to install.</p>
+      <div class="card">
+        <div class="row">
+          <div class="grow">
+            <div class="version">1.21.11</div>
+            <div class="meta">Release &nbsp;·&nbsp; Java Edition</div>
+          </div>
+          <button class="btn" id="versionBtn" type="button">Load</button>
+        </div>
+        <div class="bar"><div id="bar"></div></div>
+        <div class="progress-text" id="progressText">Not installed &nbsp;·&nbsp; about 500 MB download</div>
+      </div>
+      <div class="footer">
+        <span>Install location: %APPDATA%\.foresight</span>
+        <a id="openFolder">Open folder</a>
+      </div>
+    </section>
+
+    <!-- Screen 3: Account -->
+    <section id="account" class="hidden">
+      <button class="back" id="accountBack" type="button">← Back</button>
+      <h1>Account</h1>
+      <p class="sub">Choose how you appear in game.</p>
+
+      <div id="accountChooser">
+        <div class="card hidden" id="currentCard" style="padding-top:14px;padding-bottom:14px">
+          <div class="row">
+            <div class="grow"><span class="game-title" style="font-size:19px" id="currentName"></span>
+              <span class="meta" id="currentKind" style="margin-left:6px"></span></div>
+            <button class="btn secondary" id="signOutBtn" type="button">Sign out</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="label">Player name</div>
+          <div class="hint">Play offline with any name (3-16 letters, numbers or _).</div>
+          <div class="row">
+            <input class="input grow" id="nameInput" maxlength="20" autocomplete="off" spellcheck="false" aria-label="Player name">
+            <button class="btn" id="saveBtn" type="button" style="min-width:90px">Save</button>
+          </div>
+          <div class="error hidden" id="nameError"></div>
+        </div>
+
+        <div class="or">or</div>
+        <div class="center">
+          <button class="mc" id="msBtn" type="button">
+            <span class="ms-logo" aria-hidden="true"><i style="background:#f25022"></i><i style="background:#7fba00"></i><i style="background:#00a4ef"></i><i style="background:#ffb900"></i></span>
+            Sign in with Microsoft
+          </button>
+          <div class="small" id="msStatus">Use the account that owns Minecraft.</div>
+        </div>
+      </div>
+
+      <div id="deviceCode" class="hidden">
+        <div class="card">
+          <div class="label">Sign in with Microsoft</div>
+          <div class="steps">1. Open https://www.microsoft.com/link<br>2. Enter this code and approve:</div>
+          <div class="code" id="codeText">F7K2-9QXM</div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn" id="approveBtn" type="button">Open page</button>
+            <button class="btn secondary" id="copyBtn" type="button">Copy code</button>
+            <span class="grow"></span>
+            <button class="btn secondary" id="cancelLoginBtn" type="button" style="min-width:90px">Cancel</button>
+          </div>
+        </div>
+        <div class="small" id="codeStatus">Waiting for you to approve in the browser… (in this preview, “Open page” approves)</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { active: false, account: null, screen: "library", returnTo: "library",
+                  downloading: false, installed: false, timer: null };
+
+  // Pixel grass block, same pattern as the app
+  const dirt = ["#7a5230", "#8b5e3c", "#6e4a2b"], grass = ["#4caf50", "#5cbf60", "#43a047"];
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const px = document.createElement("i");
+    px.style.background = (y < 2 || (y === 2 && (x * 3) % 5 < 2)) ? grass[(x + y) % 3] : dirt[(x * 7 + y * 3) % 3];
+    $("gameIcon").appendChild(px);
+  }
+
+  function show(screen) {
+    if (state.downloading && screen !== "versions") return;
+    if (screen === "account" && state.screen !== "account") state.returnTo = state.screen;
+    state.screen = screen;
+    for (const s of ["library", "versions", "account"]) $(s).classList.toggle("hidden", s !== screen);
+    if (screen === "account") renderAccount();
+  }
+
+  // Header chip
+  function renderChip() {
+    const a = state.account;
+    $("chipAvatar").className = "avatar" + (a ? " " + a.type : "");
+    $("chipAvatar").textContent = a ? a.name[0].toUpperCase() : "?";
+    $("chipName").textContent = a ? a.name : "Set player";
+  }
+  $("chip").onclick = () => show("account");
+
+  // Library
+  function renderLibrary() {
+    $("libStatus").textContent = state.active ? "ACTIVE" : "INACTIVE";
+    $("libStatus").classList.toggle("on", state.active);
+    $("activateBtn").textContent = state.active ? "Deactivate" : "Activate";
+    $("libLoadBtn").disabled = !state.active;
+  }
+  $("activateBtn").onclick = () => { state.active = !state.active; renderLibrary(); };
+  $("libLoadBtn").onclick = () => show("versions");
+
+  // Version download (simulated with the real file counts)
+  const TOTAL_FILES = 4654, TOTAL_MB = 522;
+  function setProgress(f, text, cls) {
+    $("bar").style.width = (f * 100).toFixed(1) + "%";
+    $("progressText").textContent = text;
+    $("progressText").className = "progress-text" + (cls ? " " + cls : "");
+  }
+  function setBusy(busy) {
+    state.downloading = busy;
+    $("versionBtn").textContent = busy ? "Cancel" : (state.installed ? "Verify" : "Load");
+    $("versionBtn").classList.toggle("secondary", busy);
+    $("versionsBack").disabled = busy;
+  }
+  $("versionBtn").onclick = () => {
+    if (state.downloading) {
+      clearInterval(state.timer); setBusy(false);
+      setProgress(parseFloat($("bar").style.width) / 100, "Download cancelled. Press Load to resume.");
+      return;
+    }
+    setBusy(true);
+    let f = state.installed ? 0 : (parseFloat($("bar").style.width) || 0) / 100;
+    const verify = state.installed;
+    setProgress(f, "Fetching version list…");
+    state.timer = setInterval(() => {
+      f = Math.min(1, f + (verify ? 0.08 : 0.004 + Math.random() * 0.006));
+      const files = Math.round(f * TOTAL_FILES), mb = Math.round(f * TOTAL_MB);
+      setProgress(f, `Downloading Minecraft 1.21.11  ·  ${files.toLocaleString()} / ${TOTAL_FILES.toLocaleString()} files  ·  ${mb} / ${TOTAL_MB} MB`);
+      if (f >= 1) {
+        clearInterval(state.timer); state.installed = true; setBusy(false);
+        setProgress(1, "✓  Minecraft 1.21.11 is installed and verified.", "ok");
+      }
+    }, 60);
+  };
+  $("versionsBack").onclick = () => show("library");
+  $("openFolder").onclick = () => { $("openFolder").textContent = "Opens the install folder"; };
+
+  // Account
+  function renderAccount() {
+    $("accountChooser").classList.remove("hidden");
+    $("deviceCode").classList.add("hidden");
+    const a = state.account;
+    $("currentCard").classList.toggle("hidden", !a);
+    if (a) {
+      $("currentName").textContent = a.name;
+      $("currentKind").textContent = "·  " + (a.type === "microsoft" ? "Microsoft account" : "Offline player");
+    }
+    $("nameInput").value = a && a.type === "offline" ? a.name : "";
+    $("nameError").classList.add("hidden");
+    $("msStatus").textContent = "Use the account that owns Minecraft.";
+  }
+  function setAccount(a) { state.account = a; renderChip(); }
+  function leaveAccount() { show(state.returnTo || "library"); }
+
+  function saveName() {
+    const name = $("nameInput").value.trim();
+    let err = null;
+    if (name.length < 3 || name.length > 16) err = "Name must be 3-16 characters.";
+    else if (!/^[A-Za-z0-9_]+$/.test(name)) err = "Use only letters, numbers and _.";
+    if (err) { $("nameError").textContent = err; $("nameError").classList.remove("hidden"); return; }
+    setAccount({ type: "offline", name });
+    leaveAccount();
+  }
+  $("saveBtn").onclick = saveName;
+  $("nameInput").addEventListener("keydown", (e) => { if (e.key === "Enter") saveName(); });
+  $("signOutBtn").onclick = () => { setAccount(null); renderAccount(); };
+  $("accountBack").onclick = leaveAccount;
+
+  $("msBtn").onclick = () => {
+    $("msStatus").textContent = "Contacting Microsoft…";
+    setTimeout(() => {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const pick = () => chars[Math.floor(Math.random() * chars.length)];
+      $("codeText").textContent = Array.from({ length: 4 }, pick).join("") + "-" + Array.from({ length: 4 }, pick).join("");
+      $("codeStatus").textContent = "Waiting for you to approve in the browser… (in this preview, “Open page” approves)";
+      $("accountChooser").classList.add("hidden");
+      $("deviceCode").classList.remove("hidden");
+    }, 500);
+  };
+  $("approveBtn").onclick = () => {
+    $("codeStatus").textContent = "Signing in through Xbox Live…";
+    setTimeout(() => { setAccount({ type: "microsoft", name: "Player" }); leaveAccount(); }, 900);
+  };
+  $("copyBtn").onclick = () => {
+    try { navigator.clipboard.writeText($("codeText").textContent); } catch (e) {}
+    $("codeStatus").textContent = "Code copied.";
+  };
+  $("cancelLoginBtn").onclick = renderAccount;
+
+  renderChip(); renderLibrary();
+})();
+</script>
+</body>
+</html>

@@ -27,7 +27,7 @@ from typing import Callable, Optional
 
 VERSION_MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 ASSET_BASE_URL = "https://resources.download.minecraft.net"
-USER_AGENT = "Starlite-Launcher/1.0"
+USER_AGENT = "Foresight-Launcher/1.0"
 
 CHUNK_SIZE = 64 * 1024
 RETRIES = 3
@@ -74,10 +74,10 @@ def default_install_dir() -> Path:
     """Per-user data directory, kept separate from the official ``.minecraft``."""
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        return base / ".starlite"
+        return base / ".foresight"
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "starlite"
-    return Path.home() / ".starlite"
+        return Path.home() / "Library" / "Application Support" / "foresight"
+    return Path.home() / ".foresight"
 
 
 def current_os_name() -> str:

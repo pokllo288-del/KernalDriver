@@ -7,7 +7,7 @@ Xbox Live and XSTS for a Minecraft services token and profile:
     Microsoft  ->  Xbox Live (XBL)  ->  XSTS  ->  Minecraft services  ->  profile
 
 It needs an Azure app (client) ID that Mojang has approved for the Minecraft
-API. Set it with the ``STARLITE_MS_CLIENT_ID`` environment variable or the
+API. Set it with the ``FORESIGHT_MS_CLIENT_ID`` environment variable or the
 ``ms_client_id`` key in ``launcher.json``.
 """
 

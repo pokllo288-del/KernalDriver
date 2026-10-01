@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from starlite.minecraft import MinecraftInstaller, rules_allow
+from foresight.minecraft import MinecraftInstaller, rules_allow
 
 
 class RulesTest(unittest.TestCase):

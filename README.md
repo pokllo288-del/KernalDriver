@@ -1,6 +1,9 @@
-# Starlite
+# Foresight
 
 A simple, minimal Minecraft: Java Edition launcher.
+
+**See it in your browser:** open [`docs/preview.html`](docs/preview.html), an interactive
+mock-up of every screen (downloads and sign-in are simulated there).
 
 | Library | Version |
 |---|---|
@@ -22,7 +25,7 @@ A simple, minimal Minecraft: Java Edition launcher.
 * **Player name**: type any name (3-16 letters, numbers or `_`) and press
   **Save**. This is an offline player. The UUID is generated the same way the
   game does for offline players.
-* **Sign in with Microsoft** (the Minecraft-style button): Starlite shows a
+* **Sign in with Microsoft** (the Minecraft-style button): Foresight shows a
   short code and opens `microsoft.com/link`. Enter the code and approve, and
   the launcher signs you in through Microsoft → Xbox Live → Minecraft and
   shows your real Minecraft name. It checks that the account owns
@@ -39,8 +42,8 @@ approved, so each launcher needs its own:
 3. Request Minecraft API access for that app ID from Mojang
    (form: <https://aka.ms/mce-reviewappid>). Until it's approved, sign-in
    stops with "This app ID isn't approved for the Minecraft API yet".
-4. Give Starlite the *Application (client) ID*, either as an environment
-   variable `STARLITE_MS_CLIENT_ID=<id>` or as `"ms_client_id": "<id>"` in
+4. Give Foresight the *Application (client) ID*, either as an environment
+   variable `FORESIGHT_MS_CLIENT_ID=<id>` or as `"ms_client_id": "<id>"` in
    `launcher.json` inside the install folder.
 
 The chosen account is saved in `launcher.json`. For Microsoft accounts this
@@ -66,22 +69,22 @@ Install location (separate from your official `.minecraft`):
 
 | OS | Path |
 |---|---|
-| Windows | `%APPDATA%\.starlite` |
-| macOS | `~/Library/Application Support/starlite` |
-| Linux | `~/.starlite` |
+| Windows | `%APPDATA%\.foresight` |
+| macOS | `~/Library/Application Support/foresight` |
+| Linux | `~/.foresight` |
 
 ## Run
 
 Requires Python 3.10+ and nothing else (standard library only, UI is tkinter).
 
 ```
-python -m starlite
+python -m foresight
 ```
 
 Terminal-only download:
 
 ```
-python -m starlite --no-gui --version 1.21.11 --dir ./mc
+python -m foresight --no-gui --version 1.21.11 --dir ./mc
 ```
 
 Tests:
@@ -96,10 +99,10 @@ python -m unittest discover -s tests
 
 | Path | Purpose |
 |---|---|
-| `starlite/minecraft.py` | Download engine: manifest, libraries, assets, parallel downloads, checksums, retries. |
-| `starlite/app.py` | Launcher UI (Library, Version and Account screens). |
-| `starlite/auth.py` | Offline player names and Microsoft → Xbox → Minecraft sign-in. |
-| `starlite/__main__.py` | Entry point and `--no-gui` mode. |
+| `foresight/minecraft.py` | Download engine: manifest, libraries, assets, parallel downloads, checksums, retries. |
+| `foresight/app.py` | Launcher UI (Library, Version and Account screens). |
+| `foresight/auth.py` | Offline player names and Microsoft → Xbox → Minecraft sign-in. |
+| `foresight/__main__.py` | Entry point and `--no-gui` mode. |
 | `tests/` | Unit tests for downloads and accounts (sign-in flow is mocked). |
 
 ## Not yet included

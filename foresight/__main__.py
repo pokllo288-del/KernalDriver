@@ -1,6 +1,6 @@
-"""Entry point: ``python -m starlite`` opens the launcher.
+"""Entry point: ``python -m foresight`` opens the launcher.
 
-``python -m starlite --no-gui [--version 1.21.11] [--dir PATH]`` downloads
+``python -m foresight --no-gui [--version 1.21.11] [--dir PATH]`` downloads
 from the terminal instead.
 """
 
@@ -34,7 +34,7 @@ def _cli(version: str, install_dir: Path | None) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="starlite", description="Starlite Minecraft launcher")
+    parser = argparse.ArgumentParser(prog="foresight", description="Foresight Minecraft launcher")
     parser.add_argument("--no-gui", action="store_true", help="download from the terminal")
     parser.add_argument("--version", default="1.21.11", help="Minecraft version (with --no-gui)")
     parser.add_argument("--dir", type=Path, default=None, help="install directory (with --no-gui)")

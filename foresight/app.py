@@ -1,4 +1,4 @@
-"""Starlite launcher UI (tkinter, standard library only).
+"""Foresight launcher UI (tkinter, standard library only).
 
 Screens:
   1. Library  - the Minecraft game card with Activate / Load.
@@ -23,7 +23,7 @@ from .auth import (Account, AuthCancelled, AuthError, DeviceCode, MicrosoftAuth,
                    offline_account)
 from .minecraft import DownloadCancelled, MinecraftInstaller, Progress
 
-APP_NAME = "Starlite"
+APP_NAME = "Foresight"
 GAME_VERSION = "1.21.11"
 
 # Palette
@@ -139,7 +139,7 @@ class MinecraftButton(tk.Canvas):
         self._draw()
 
 
-class StarliteApp:
+class ForesightApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.installer = MinecraftInstaller()
@@ -161,7 +161,7 @@ class StarliteApp:
 
         style = ttk.Style(root)
         style.theme_use("clam")
-        style.configure("Starlite.Horizontal.TProgressbar", troughcolor=SURFACE_HI,
+        style.configure("Foresight.Horizontal.TProgressbar", troughcolor=SURFACE_HI,
                         background=ACCENT, bordercolor=SURFACE_HI,
                         lightcolor=ACCENT, darkcolor=ACCENT, thickness=6)
 
@@ -197,7 +197,7 @@ class StarliteApp:
     def _build_header(self) -> None:
         header = tk.Frame(self.root, bg=BG)
         header.pack(fill="x", padx=32, pady=(24, 8))
-        tk.Label(header, text="●", fg=ACCENT, bg=BG, font=font(12)).pack(side="left")
+        tk.Label(header, text="◉", fg=ACCENT, bg=BG, font=font(12)).pack(side="left")
         tk.Label(header, text=f" {APP_NAME.upper()}", fg=TEXT, bg=BG,
                  font=font(13, "bold")).pack(side="left")
         tk.Label(header, text="Launcher", fg=MUTED, bg=BG, font=font(11)).pack(side="left", padx=8)
@@ -332,7 +332,7 @@ class StarliteApp:
         self.version_btn = Button(row, "Load", self._on_load_version, width=12)
         self.version_btn.pack(side="right")
 
-        self.progress = ttk.Progressbar(card, style="Starlite.Horizontal.TProgressbar",
+        self.progress = ttk.Progressbar(card, style="Foresight.Horizontal.TProgressbar",
                                         maximum=1000, mode="determinate")
         self.progress.pack(fill="x", pady=(20, 8))
 
@@ -486,7 +486,7 @@ class StarliteApp:
         self.show_account()
 
     def _client_id(self) -> str:
-        return os.environ.get("STARLITE_MS_CLIENT_ID") or self.settings.get("ms_client_id", "")
+        return os.environ.get("FORESIGHT_MS_CLIENT_ID") or self.settings.get("ms_client_id", "")
 
     def _start_microsoft_login(self) -> None:
         if self.auth_worker and self.auth_worker.is_alive():
@@ -628,5 +628,5 @@ class StarliteApp:
 
 def run() -> None:
     root = tk.Tk()
-    StarliteApp(root)
+    ForesightApp(root)
     root.mainloop()

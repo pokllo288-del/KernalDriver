@@ -4,8 +4,8 @@ import unittest
 import uuid
 from unittest import mock
 
-from starlite import auth
-from starlite.auth import (Account, AuthError, DeviceCode, MicrosoftAuth, offline_account,
+from foresight import auth
+from foresight.auth import (Account, AuthError, DeviceCode, MicrosoftAuth, offline_account,
                            offline_uuid, validate_player_name)
 
 
